@@ -27,13 +27,11 @@ public class PaymentService {
         this.razorpayClient = razorpayClient;
     }
 
-    // ============================================================
-    // 🔹 1. CREATE RAZORPAY ORDER
-    // ============================================================
+    // ================= CREATE ORDER =================
     public String createRazorpayOrder(Double amount) throws Exception {
 
         JSONObject options = new JSONObject();
-        options.put("amount", amount * 100); // convert to paise
+        options.put("amount", amount * 100); // rupees → paise
         options.put("currency", "INR");
         options.put("receipt", "txn_" + System.currentTimeMillis());
 
@@ -42,9 +40,7 @@ public class PaymentService {
         return order.get("id");
     }
 
-    // ============================================================
-    // 🔹 2. VERIFY SIGNATURE (VERY IMPORTANT)
-    // ============================================================
+    // ================= VERIFY SIGNATURE =================
     public boolean verifySignature(String razorpayOrderId,
                                    String razorpayPaymentId,
                                    String razorpaySignature) {
@@ -52,20 +48,22 @@ public class PaymentService {
         try {
             String payload = razorpayOrderId + "|" + razorpayPaymentId;
 
-            return Utils.verifySignature(
+            boolean result = Utils.verifySignature(
                     payload,
                     razorpaySignature,
-                    razorpayKeySecret
+                    razorpayKeySecret.trim()
             );
 
+            System.out.println("Verification Result: " + result);
+            return result;
+
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
         }
     }
 
-    // ============================================================
-    // 🔹 3. SAVE PAYMENT ONLY AFTER SUCCESS
-    // ============================================================
+    // ================= SAVE SUCCESS PAYMENT =================
     public Payment saveSuccessfulPayment(String orderId,
                                          String userEmail,
                                          Double amount,
@@ -79,17 +77,13 @@ public class PaymentService {
         return paymentRepository.save(payment);
     }
 
-    // ============================================================
-    // 🔹 4. REFUND PAYMENT (REAL RAZORPAY REFUND)
-    // ============================================================
+    // ================= REFUND =================
     public Payment refundPayment(String paymentId) throws Exception {
 
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
 
-        // Call Razorpay refund API
         JSONObject refundRequest = new JSONObject();
-        refundRequest.put("payment_id", payment.getTransactionId());
 
         Refund refund = razorpayClient.payments
                 .refund(payment.getTransactionId(), refundRequest);
@@ -99,16 +93,10 @@ public class PaymentService {
         return paymentRepository.save(payment);
     }
 
-    // ============================================================
-    // 🔹 5. GET PAYMENTS BY USER
-    // ============================================================
     public List<Payment> getUserPayments(String email) {
         return paymentRepository.findByUserEmail(email);
     }
 
-    // ============================================================
-    // 🔹 6. GET PAYMENTS BY ORDER
-    // ============================================================
     public List<Payment> getOrderPayments(String orderId) {
         return paymentRepository.findByOrderId(orderId);
     }
